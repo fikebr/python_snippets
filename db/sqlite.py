@@ -1,71 +1,61 @@
 import os
 import sqlite3
-
-from .config import Config
-
-config = Config()
+from typing import Union, List, Optional
 
 
-class Sqlite:
-    def __init__(self):
-        self.db_file = self.get_dbfile()
+class SQLite:
+    def __init__(self, db_filename: str) -> None:
+        self.db_file = self.get_dbfile(db_filename)
         self.db = self.dbconnect(self.db_file)
 
-    def get_dbfile(self):
-        script_folder = os.path.split(os.path.split(__file__)[0])[0]
-        db_file = config.dbfile
-        db_file = os.path.join(script_folder, "db", db_file)
-        # print(f"dbfile: {db_file}")
+    def get_dbfile(self, filename: str) -> str:
+        if os.path.exists(filename):
+            return filename
 
-        if os.path.exists(db_file):
-            return db_file
-        else:
-            raise ("DB file not found: {}".format(db_file))
+        script_folder = os.path.dirname(os.path.abspath(__file__))
+        db_file = os.path.join(script_folder, "db", filename)
+        # print(f"Database file: {db_file}")
 
-    def dbconnect(self, database_file):
+        if not os.path.exists(db_file):
+            raise FileNotFoundError(f"Database file not found: {db_file}")
+
+        return db_file
+
+    def dbconnect(self, database_file: str) -> sqlite3.Connection:
         try:
             # Creates or opens a file called mydb with a SQLite3 DB
             db = sqlite3.connect(database_file)
             return db
-        # Catch the exception
         except Exception as e:
-            # Roll back any change if something goes wrong
-            db.rollback()
-            raise e
+            print(f"Error connecting to database: {e}")
+            raise
 
-    def execute(self, sql, values=[]):
+    def execute(self, sql: str, values: Union[List[any], tuple] = []) -> int:
         try:
-            cursor = self.db.cursor()
-            # INSERT INTO users(name, phone, email, password) VALUES(?,?,?,?)
-            if values:
+            with self.db:
+                cursor = self.db.cursor()
                 cursor.execute(sql, values)
-            else:
+                return cursor.rowcount
+        except Exception as e:
+            print(f"Error executing SQL: {e}")
+            raise
+
+    def select_one(self, sql: str) -> Optional[tuple]:
+        try:
+            with self.db:
+                cursor = self.db.cursor()
                 cursor.execute(sql)
-            self.db.commit()
+                return cursor.fetchone()
         except Exception as e:
-            # Roll back any change if something goes wrong
-            self.db.rollback()
-            raise e
+            print(f"Error executing SELECT query: {e}")
+            raise
 
-    def select_one(self, sql):
+    def select_all(self, sql: str) -> List[tuple]:
         try:
-            cursor = self.db.cursor()
-            cursor.execute(sql)
-            row = cursor.fetchone()
-            return row
+            with self.db:
+                cursor = self.db.cursor()
+                cursor.execute(sql)
+                return cursor.fetchall()
         except Exception as e:
-            # Roll back any change if something goes wrong
-            self.db.rollback()
-            raise e
-
-    def select_all(self, sql):
-        try:
-            cursor = self.db.cursor()
-            cursor.execute(sql)
-            rows = cursor.fetchall()
-            print(cursor.description)
-            return rows
-        except Exception as e:
-            # Roll back any change if something goes wrong
-            self.db.rollback()
-            raise e
+            print(f"Error executing SELECT query: {e}")
+            raise
